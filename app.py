@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import pandas as pd
 import streamlit as st
 from PIL import Image
 from streamlit_drawable_canvas import st_canvas
@@ -13,23 +14,50 @@ except ImportError:
     load_model_fn = tf.keras.models.load_model
 
 # -------------------------------------------------------------
-# Streamlit App Page Configuration (Basic Academic Layout)
+# 1. Streamlit App Page Configuration (Academic Layout)
 # -------------------------------------------------------------
 st.set_page_config(
     page_title="Handwritten Digit Recognition",
     page_icon="🔢",
-    layout="centered"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
 # -------------------------------------------------------------
-# Title and Description
+# 2. Sidebar - Academic Project Information
+# -------------------------------------------------------------
+with st.sidebar:
+    st.header("🎓 Academic Information")
+    st.markdown("**Subject:** Introduction to Artificial Intelligence")
+    st.markdown("**Project:** Handwritten Digit Recognition")
+    st.markdown("---")
+    
+    st.subheader("🧠 Neural Network Architecture")
+    st.markdown("""
+    - **Input Layer:** 784 neurons (28×28 pixels)
+    - **Hidden Layer 1:** 128 neurons (ReLU)
+    - **Hidden Layer 2:** 64 neurons (ReLU)
+    - **Output Layer:** 10 neurons (Softmax)
+    """)
+    st.markdown("---")
+    
+    st.subheader("⚙️ Training Hyperparameters")
+    st.markdown("""
+    - **Dataset:** MNIST (60,000 train / 10,000 test)
+    - **Optimizer:** Adam
+    - **Loss:** Sparse Categorical Crossentropy
+    - **Test Accuracy:** ~97.9%
+    """)
+
+# -------------------------------------------------------------
+# 3. Main Header & Description
 # -------------------------------------------------------------
 st.title("Handwritten Digit Recognition using Neural Network")
-st.write("Draw a handwritten digit from 0 to 9 and let the neural network predict it.")
+st.markdown("Draw a handwritten digit from **0 to 9** on the canvas below and let the artificial neural network predict it in real-time.")
 st.markdown("---")
 
 # -------------------------------------------------------------
-# Model Verification & Loading
+# 4. Model Verification & Loading
 # -------------------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "model", "digit_model.keras")
@@ -42,15 +70,14 @@ if not os.path.exists(MODEL_PATH):
     st.error(
         "⚠️ **Model File Not Found!**\n\n"
         f"The trained model file `{MODEL_PATH}` does not exist.\n\n"
-        "Please execute the training script first:\n"
-        "```bash\npython train.py\n```"
+        "Please run `python train.py` first to train and save the model."
     )
     st.stop()
 
 model = get_model(MODEL_PATH)
 
 # -------------------------------------------------------------
-# Preprocessing Function (MNIST Bounding-Box Centering)
+# 5. MNIST Bounding-Box Centering Preprocessor
 # -------------------------------------------------------------
 def preprocess_drawn_image(img_rgba):
     """
@@ -102,68 +129,84 @@ def preprocess_drawn_image(img_rgba):
     return input_tensor, canvas_28x28
 
 # -------------------------------------------------------------
-# Drawing Canvas Setup
+# 6. Main UI Columns Setup
 # -------------------------------------------------------------
-st.subheader("1. Draw a Digit (0-9)")
-st.caption("Use your mouse or touch screen to draw a single digit inside the box below:")
+col1, col2 = st.columns([1, 1], gap="large")
 
-# Canvas settings: 280x280 drawing area with 24px stroke width
-canvas_result = st_canvas(
-    fill_color="#000000",
-    stroke_width=24,
-    stroke_color="#FFFFFF",      # White stroke on black background (MNIST format)
-    background_color="#000000",  # Black background
-    height=280,
-    width=280,
-    drawing_mode="freedraw",
-    key="canvas",
-)
+with col1:
+    st.subheader("1. Interactive Drawing Canvas")
+    st.caption("Draw a single digit (0-9) inside the box below:")
 
-st.write("Click the button below to analyze your drawing.")
-predict_btn = st.button("Predict Digit", type="primary")
+    # Canvas settings: 280x280 drawing area with 24px stroke width
+    canvas_result = st_canvas(
+        fill_color="#000000",
+        stroke_width=24,
+        stroke_color="#FFFFFF",      # White stroke on black background (MNIST format)
+        background_color="#000000",  # Black background
+        height=280,
+        width=280,
+        drawing_mode="freedraw",
+        key="canvas",
+    )
 
-# -------------------------------------------------------------
-# Preprocessing and Prediction Logic
-# -------------------------------------------------------------
-if predict_btn:
-    if canvas_result.image_data is not None:
-        input_tensor, img_28x28 = preprocess_drawn_image(canvas_result.image_data)
+    predict_btn = st.button("🔍 Predict Digit", type="primary", use_container_width=True)
 
-        if input_tensor is None:
-            st.warning("Please draw a digit on the canvas before clicking Predict!")
-        else:
-            # Perform Prediction using Artificial Neural Network
-            raw_predictions = model.predict(input_tensor, verbose=0)
-            predictions = raw_predictions[0]
-            predicted_digit = int(np.argmax(predictions))
-            confidence = float(np.max(predictions)) * 100.0
+with col2:
+    st.subheader("2. Prediction & Probability Analysis")
 
-            st.markdown("---")
-            st.subheader("2. Prediction Result")
+    if predict_btn:
+        if canvas_result.image_data is not None:
+            input_tensor, img_28x28 = preprocess_drawn_image(canvas_result.image_data)
 
-            # Display Predicted Digit and Confidence
-            st.markdown(f"### Predicted Digit: **{predicted_digit}**")
-            st.markdown(f"### Confidence: **{confidence:.2f}%**")
+            if input_tensor is None:
+                st.warning("⚠️ Please draw a digit on the canvas before clicking Predict!")
+            else:
+                # Perform Prediction using Artificial Neural Network
+                raw_predictions = model.predict(input_tensor, verbose=0)
+                predictions = raw_predictions[0]
+                predicted_digit = int(np.argmax(predictions))
+                confidence = float(np.max(predictions)) * 100.0
 
-            # Display Centered 28x28 Input Preview
-            st.write("**MNIST-Centered Preprocessed Image (28x28 pixels fed to Neural Network):**")
-            st.image(img_28x28, width=140, caption="Auto-centered 28x28 MNIST input")
+                # Display Results in Metric Cards
+                m_col1, m_col2 = st.columns(2)
+                with m_col1:
+                    st.metric(label="Predicted Digit", value=f"Digit {predicted_digit}")
+                with m_col2:
+                    st.metric(label="Confidence Score", value=f"{confidence:.2f}%")
 
-            st.markdown("---")
-            st.subheader("3. Probability Distribution across Digits (0-9)")
-            st.write("The output layer uses the **Softmax** activation function to output probabilities for each class:")
+                st.markdown("---")
+                
+                # Display 28x28 Preprocessed Input Image
+                img_col1, img_col2 = st.columns([1, 2])
+                with img_col1:
+                    st.write("**MNIST Centered Input (28×28):**")
+                    st.image(img_28x28, width=110, caption="Auto-Centered 28x28")
+                with img_col2:
+                    st.write("**Preprocessing Info:**")
+                    st.caption("• Cropped stroke bounding box")
+                    st.caption("• Rescaled into 20×20 preserving aspect ratio")
+                    st.caption("• Centered inside 28×28 black frame")
 
-            # Prepare data for probability table and bar chart
-            prob_dict = {f"Digit {i}": float(predictions[i]) for i in range(10)}
-            
-            # Display Bar Chart of Probabilities
-            st.bar_chart(prob_dict)
+                st.markdown("---")
+                st.write("**Softmax Output Probabilities (Digits 0-9):**")
 
-            # Display detailed numerical table
-            st.write("**Detailed Probabilities Table:**")
-            st.dataframe(
-                [{"Digit": i, "Probability": f"{predictions[i]:.4f}", "Percentage": f"{predictions[i]*100:.2f}%"} for i in range(10)],
-                use_container_width=True
-            )
-else:
-    st.info("Draw a digit above and click 'Predict Digit'.")
+                # Prepare DataFrame for chart & table
+                df_probs = pd.DataFrame({
+                    "Digit": [f"Digit {i}" for i in range(10)],
+                    "Probability": [float(p) for p in predictions]
+                }).set_index("Digit")
+
+                st.bar_chart(df_probs, height=220)
+
+                # Detailed numerical table
+                st.dataframe(
+                    pd.DataFrame({
+                        "Digit": list(range(10)),
+                        "Probability": [f"{predictions[i]:.4f}" for i in range(10)],
+                        "Percentage": [f"{predictions[i]*100:.2f}%" for i in range(10)]
+                    }),
+                    use_container_width=True,
+                    hide_index=True
+                )
+    else:
+        st.info("👈 Draw a digit on the left canvas and click **Predict Digit** to view results.")

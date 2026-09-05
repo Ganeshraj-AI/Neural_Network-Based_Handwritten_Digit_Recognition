@@ -2,5 +2,6 @@ tensorflow
 streamlit
 streamlit-drawable-canvas
 numpy
+pandas
 matplotlib
 pillow
