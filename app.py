@@ -155,8 +155,13 @@ with col2:
     st.subheader("2. Prediction & Probability Analysis")
 
     if predict_btn:
-        # Robust safety check for canvas result image data across Streamlit versions
-        image_data = getattr(canvas_result, "image_data", None) if canvas_result is not None else None
+        # Safely extract image_data handling property exceptions from streamlit_drawable_canvas
+        image_data = None
+        if canvas_result is not None:
+            try:
+                image_data = canvas_result.image_data
+            except Exception:
+                image_data = None
         
         if isinstance(image_data, np.ndarray):
             input_tensor, img_28x28 = preprocess_drawn_image(image_data)
