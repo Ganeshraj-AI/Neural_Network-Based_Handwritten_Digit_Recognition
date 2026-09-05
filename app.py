@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 from PIL import Image
-from streamlit_drawable_canvas import st_canvas
+from streamlit_drawable_canvas import CanvasResult, st_canvas
 
 # Flexible Keras loading for TensorFlow / Keras 3.x compatibility
 try:
@@ -155,16 +155,13 @@ with col2:
     st.subheader("2. Prediction & Probability Analysis")
 
     if predict_btn:
-        # Safely extract image_data handling property exceptions from streamlit_drawable_canvas
-        image_data = None
-        if canvas_result is not None:
-            try:
-                image_data = canvas_result.image_data
-            except Exception:
-                image_data = None
-        
-        if isinstance(image_data, np.ndarray):
-            input_tensor, img_28x28 = preprocess_drawn_image(image_data)
+        # Check if canvas_result is a valid CanvasResult instance with image_data array
+        if (
+            canvas_result is not None
+            and isinstance(canvas_result, CanvasResult)
+            and isinstance(canvas_result.image_data, np.ndarray)
+        ):
+            input_tensor, img_28x28 = preprocess_drawn_image(canvas_result.image_data)
 
             if input_tensor is None:
                 st.warning("⚠️ Please draw a digit on the canvas before clicking Predict!")
