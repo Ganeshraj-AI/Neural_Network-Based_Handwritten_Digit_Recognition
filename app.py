@@ -50,15 +50,67 @@ if not os.path.exists(MODEL_PATH):
 model = get_model(MODEL_PATH)
 
 # -------------------------------------------------------------
+# Preprocessing Function (MNIST Bounding-Box Centering)
+# -------------------------------------------------------------
+def preprocess_drawn_image(img_rgba):
+    """
+    Preprocess user drawing to match official MNIST standards:
+    1. Extract drawing bounding box (crop outer empty margins)
+    2. Maintain aspect ratio & scale digit to fit inside 20x20 box
+    3. Center the 20x20 digit inside a 28x28 black canvas (4-pixel border padding)
+    4. Normalize pixel intensity values to [0.0, 1.0]
+    """
+    # Convert RGBA canvas array to PIL Grayscale Image
+    img_pil = Image.fromarray(img_rgba.astype('uint8'), 'RGBA').convert('L')
+    arr = np.array(img_pil)
+
+    # Find non-zero drawn pixels (threshold > 10)
+    coords = np.argwhere(arr > 10)
+    if coords.size == 0:
+        return None, None
+
+    # Get bounding box coordinates
+    min_y, min_x = coords.min(axis=0)
+    max_y, max_x = coords.max(axis=0)
+
+    # Crop digit using bounding box
+    cropped = img_pil.crop((min_x, min_y, max_x + 1, max_y + 1))
+    w, h = cropped.size
+
+    # Scale cropped digit into 20x20 frame while preserving aspect ratio
+    if w > h:
+        new_w = 20
+        new_h = max(1, int(round((h / w) * 20)))
+    else:
+        new_h = 20
+        new_w = max(1, int(round((w / h) * 20)))
+
+    resized_digit = cropped.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+    # Paste 20x20 digit into the center of a black 28x28 canvas
+    canvas_28x28 = Image.new("L", (28, 28), 0)
+    paste_x = (28 - new_w) // 2
+    paste_y = (28 - new_h) // 2
+    canvas_28x28.paste(resized_digit, (paste_x, paste_y))
+
+    # Normalize pixel intensity to range [0.0, 1.0]
+    normalized = np.array(canvas_28x28, dtype=np.float32) / 255.0
+
+    # Reshape tensor to (1, 28, 28) for Neural Network input
+    input_tensor = np.reshape(normalized, (1, 28, 28))
+
+    return input_tensor, canvas_28x28
+
+# -------------------------------------------------------------
 # Drawing Canvas Setup
 # -------------------------------------------------------------
 st.subheader("1. Draw a Digit (0-9)")
 st.caption("Use your mouse or touch screen to draw a single digit inside the box below:")
 
-# Canvas settings: 280x280 drawing area (10x scale of 28x28)
+# Canvas settings: 280x280 drawing area with 24px stroke width
 canvas_result = st_canvas(
     fill_color="#000000",
-    stroke_width=20,
+    stroke_width=24,
     stroke_color="#FFFFFF",      # White stroke on black background (MNIST format)
     background_color="#000000",  # Black background
     height=280,
@@ -75,28 +127,11 @@ predict_btn = st.button("Predict Digit", type="primary")
 # -------------------------------------------------------------
 if predict_btn:
     if canvas_result.image_data is not None:
-        # Extract pixel data from canvas (RGBA numpy array)
-        img_array = canvas_result.image_data
+        input_tensor, img_28x28 = preprocess_drawn_image(canvas_result.image_data)
 
-        # Check if user has drawn anything (sum of RGB channels > 0)
-        if np.sum(img_array[:, :, :3]) == 0:
+        if input_tensor is None:
             st.warning("Please draw a digit on the canvas before clicking Predict!")
         else:
-            # Convert RGBA numpy array to PIL Image
-            img = Image.fromarray(img_array.astype('uint8'), 'RGBA')
-            
-            # Convert image to Grayscale ('L')
-            img_gray = img.convert('L')
-
-            # Resize image from 280x280 down to 28x28 using High-quality LANCZOS resampling
-            img_resized = img_gray.resize((28, 28), Image.Resampling.LANCZOS)
-
-            # Convert PIL image to numpy array of float32 and normalize pixel values to [0.0, 1.0]
-            img_normalized = np.array(img_resized, dtype=np.float32) / 255.0
-
-            # Reshape image to batch shape (1, 28, 28) for neural network input
-            input_tensor = np.reshape(img_normalized, (1, 28, 28))
-
             # Perform Prediction using Artificial Neural Network
             raw_predictions = model.predict(input_tensor, verbose=0)
             predictions = raw_predictions[0]
@@ -110,9 +145,9 @@ if predict_btn:
             st.markdown(f"### Predicted Digit: **{predicted_digit}**")
             st.markdown(f"### Confidence: **{confidence:.2f}%**")
 
-            # Display Processed 28x28 Input Preview
-            st.write("**Processed Input Image (28x28 pixels as fed into Neural Network):**")
-            st.image(img_resized, width=140, caption="Normalized 28x28 MNIST input")
+            # Display Centered 28x28 Input Preview
+            st.write("**MNIST-Centered Preprocessed Image (28x28 pixels fed to Neural Network):**")
+            st.image(img_28x28, width=140, caption="Auto-centered 28x28 MNIST input")
 
             st.markdown("---")
             st.subheader("3. Probability Distribution across Digits (0-9)")
