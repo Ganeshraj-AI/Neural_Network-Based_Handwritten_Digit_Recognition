@@ -155,8 +155,11 @@ with col2:
     st.subheader("2. Prediction & Probability Analysis")
 
     if predict_btn:
-        if canvas_result.image_data is not None:
-            input_tensor, img_28x28 = preprocess_drawn_image(canvas_result.image_data)
+        # Robust safety check for canvas result image data across Streamlit versions
+        image_data = getattr(canvas_result, "image_data", None) if canvas_result is not None else None
+        
+        if isinstance(image_data, np.ndarray):
+            input_tensor, img_28x28 = preprocess_drawn_image(image_data)
 
             if input_tensor is None:
                 st.warning("⚠️ Please draw a digit on the canvas before clicking Predict!")
@@ -208,5 +211,7 @@ with col2:
                     use_container_width=True,
                     hide_index=True
                 )
+        else:
+            st.warning("⚠️ Please draw a digit on the canvas before clicking Predict!")
     else:
         st.info("👈 Draw a digit on the left canvas and click **Predict Digit** to view results.")
